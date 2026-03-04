@@ -34,6 +34,12 @@ def get_session(sid: str) -> dict | None:
     return _sessions.get(sid)
 
 
+def update_session(sid: str, **kwargs):
+    with _lock:
+        if sid in _sessions:
+            _sessions[sid].update(kwargs)
+
+
 @pdf_bp.route('/api/pdf/upload', methods=['POST'])
 def upload_pdf():
     if 'file' not in request.files:

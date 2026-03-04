@@ -7,7 +7,7 @@ import queue
 import threading
 from flask import Blueprint, request, jsonify, Response
 from services import pdf_service, ai_service, config_service
-from routes.pdf_routes import get_session
+from routes.pdf_routes import get_session, update_session
 
 ai_bp = Blueprint('ai', __name__)
 
@@ -16,7 +16,16 @@ _tasks = {}  # task_id -> { queue, done }
 
 @ai_bp.route('/api/ai/config', methods=['GET'])
 def get_config():
-    cfg = config_service.load_config()
+    sid = request.args.get('session_id')
+    session = get_session(sid) if sid else None
+
+    # 如果会话（用户）有自定义配置，则使用会话配置
+    if session and 'ai_config' in session:
+        cfg = session['ai_config']
+    else:
+        # 否则尝试获取管理员保存的全局配置
+        cfg = config_service.load_global_config()
+
     # 脱敏 API Key
     safe_cfg = dict(cfg)
     if safe_cfg.get('api_key'):
@@ -30,48 +39,25 @@ def get_config():
 @ai_bp.route('/api/ai/config', methods=['PUT'])
 def save_config():
     data = request.json
-    cfg = config_service.load_config()
+    sid = data.get('session_id')
 
-    if 'api_url' in data:
-        cfg['api_url'] = data['api_url'].strip().rstrip('/')
-    if 'api_key' in data:
-        cfg['api_key'] = data['api_key'].strip()
-    if 'model' in data:
-        cfg['model'] = data['model'].strip()
-    if 'max_tokens' in data:
-        cfg['max_tokens'] = int(data['max_tokens'])
+    session = get_session(sid)
+    if not session:
+        return jsonify(error="会话不存在或已过期"), 404
 
-    config_service.save_config(cfg)
-    return jsonify(ok=True)
+    # 以全局配置为基础，合并用户本次修改（仅在当前 session 有效）
+    base_cfg = config_service.load_global_config()
+    cfg = session.get('ai_config', base_cfg).copy()
 
+    for k in ['api_url', 'api_key', 'model', 'max_tokens']:
+        if k in data:
+            if k == 'max_tokens':
+                cfg[k] = int(data[k])
+            elif isinstance(data[k], str):
+                cfg[k] = data[k].strip().rstrip('/') if k == 'api_url' else data[k].strip()
 
-@ai_bp.route('/api/ai/test-connection', methods=['POST'])
-def test_connection():
-    data = request.json
-    api_url = data.get('api_url', '').strip().rstrip('/')
-    api_key = data.get('api_key', '').strip()
-
-    if not api_url:
-        return jsonify(error="API URL 不能为空"), 400
-
-    try:
-        models = ai_service.fetch_models(api_url, api_key)
-        return jsonify(ok=True, models=models)
-    except Exception as e:
-        return jsonify(ok=False, error=str(e)[:200]), 200
-
-
-@ai_bp.route('/api/ai/fetch-models', methods=['POST'])
-def fetch_models():
-    data = request.json
-    api_url = data.get('api_url', '').strip().rstrip('/')
-    api_key = data.get('api_key', '').strip()
-
-    try:
-        models = ai_service.fetch_models(api_url, api_key)
-        return jsonify(models=models)
-    except Exception as e:
-        return jsonify(error=str(e)[:200]), 500
+    update_session(sid, ai_config=cfg)
+    return jsonify(ok=True, message="临时会话配置已保存")
 
 
 @ai_bp.route('/api/ai/recognize', methods=['POST'])
@@ -87,7 +73,9 @@ def ai_recognize():
     if not page_indices:
         return jsonify(error="未选择目录页"), 400
 
-    cfg = config_service.load_config()
+    # 优先使用会话覆盖的配置，否则使用管理员的全局配置
+    global_cfg = config_service.load_global_config()
+    cfg = session.get('ai_config', global_cfg)
 
     task_id = str(uuid.uuid4())
     q = queue.Queue()
@@ -135,6 +123,35 @@ def ai_recognize():
 
     threading.Thread(target=worker, daemon=True).start()
     return jsonify(task_id=task_id)
+
+
+@ai_bp.route('/api/ai/test-connection', methods=['POST'])
+def test_connection():
+    data = request.json
+    api_url = data.get('api_url', '').strip().rstrip('/')
+    api_key = data.get('api_key', '').strip()
+
+    if not api_url:
+        return jsonify(error="API URL 不能为空"), 400
+
+    try:
+        models = ai_service.fetch_models(api_url, api_key)
+        return jsonify(ok=True, models=models)
+    except Exception as e:
+        return jsonify(ok=False, error=str(e)[:200]), 200
+
+
+@ai_bp.route('/api/ai/fetch-models', methods=['POST'])
+def fetch_models():
+    data = request.json
+    api_url = data.get('api_url', '').strip().rstrip('/')
+    api_key = data.get('api_key', '').strip()
+
+    try:
+        models = ai_service.fetch_models(api_url, api_key)
+        return jsonify(models=models)
+    except Exception as e:
+        return jsonify(error=str(e)[:200]), 500
 
 
 @ai_bp.route('/api/ai/status/<task_id>')

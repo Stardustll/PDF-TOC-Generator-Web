@@ -3,22 +3,25 @@
 
 import os
 from flask import Flask, render_template
-from config import UPLOAD_FOLDER, MAX_CONTENT_LENGTH
+from config import UPLOAD_FOLDER, MAX_CONTENT_LENGTH, SECRET_KEY
 
 def create_app():
     app = Flask(__name__)
     app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
     app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
+    app.config['SECRET_KEY'] = SECRET_KEY
 
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
     from routes.pdf_routes import pdf_bp
     from routes.toc_routes import toc_bp
     from routes.ai_routes import ai_bp
+    from routes.admin_routes import admin_bp
 
     app.register_blueprint(pdf_bp)
     app.register_blueprint(toc_bp)
     app.register_blueprint(ai_bp)
+    app.register_blueprint(admin_bp)
 
     @app.route('/')
     def index():

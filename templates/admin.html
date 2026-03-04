@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台 — PDF 目录生成器</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #f1f5f9;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0,0,0,.1);
+            padding: 36px 40px;
+            width: 480px;
+            max-width: 96vw;
+        }
+        h1 { font-size: 1.4rem; color: #1e293b; margin-bottom: 8px; }
+        .subtitle { color: #64748b; font-size: .875rem; margin-bottom: 28px; }
+        label { display: block; font-size: .875rem; color: #475569; margin-bottom: 6px; font-weight: 500; }
+        input[type=text], input[type=password], input[type=number], select {
+            width: 100%; padding: 9px 12px; border: 1px solid #cbd5e1;
+            border-radius: 7px; font-size: .9rem; outline: none;
+            transition: border-color .2s;
+        }
+        input:focus, select:focus { border-color: #6366f1; }
+        .form-group { margin-bottom: 18px; }
+        .input-row { display: flex; gap: 8px; align-items: center; }
+        .input-row input { flex: 1; }
+        .btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 9px 20px; border: none; border-radius: 7px;
+            font-size: .9rem; cursor: pointer; font-weight: 500;
+            transition: opacity .15s;
+        }
+        .btn:hover { opacity: .88; }
+        .btn:disabled { opacity: .5; cursor: not-allowed; }
+        .btn-primary { background: #6366f1; color: #fff; }
+        .btn-green  { background: #16a34a; color: #fff; }
+        .btn-red    { background: #dc2626; color: #fff; }
+        .btn-gray   { background: #e2e8f0; color: #475569; }
+        .btn-sm     { padding: 6px 14px; font-size: .82rem; }
+        .footer-row { display: flex; gap: 10px; margin-top: 8px; justify-content: flex-end; }
+        .alert {
+            padding: 10px 14px; border-radius: 7px; font-size: .875rem;
+            margin-bottom: 18px; display: none;
+        }
+        .alert.show { display: block; }
+        .alert-error   { background: #fee2e2; color: #991b1b; }
+        .alert-success { background: #dcfce7; color: #166534; }
+        .status-text { font-size: .82rem; color: #64748b; margin-top: 6px; min-height: 18px; }
+        .status-text.ok  { color: #16a34a; }
+        .status-text.err { color: #dc2626; }
+        .divider { border: none; border-top: 1px solid #e2e8f0; margin: 24px 0; }
+        .back-link { font-size: .82rem; color: #6366f1; text-decoration: none; display: inline-block; margin-top: 16px; }
+        .back-link:hover { text-decoration: underline; }
+        /* 登录面板 / 配置面板 切换 */
+        #loginPanel, #configPanel { display: none; }
+        #loginPanel.active, #configPanel.active { display: block; }
+        .admin-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 24px;
+        }
+    </style>
+</head>
+<body>
+<div class="card">
+
+    <!-- ── 登录面板 ── -->
+    <div id="loginPanel">
+        <h1>🔐 管理员登录</h1>
+        <p class="subtitle">PDF 目录生成器 · 管理后台</p>
+        <div id="loginAlert" class="alert alert-error"></div>
+        <div class="form-group">
+            <label>管理员密码</label>
+            <input type="password" id="loginPassword" placeholder="请输入管理员密码"
+                   onkeydown="if(event.key==='Enter') doLogin()">
+        </div>
+        <div class="footer-row">
+            <button class="btn btn-primary" onclick="doLogin()">🔑 登录</button>
+        </div>
+        <a class="back-link" href="/">← 返回主界面</a>
+    </div>
+
+    <!-- ── 配置面板 ── -->
+    <div id="configPanel">
+        <div class="admin-header">
+            <div>
+                <h1>⚙ 全局 AI 配置</h1>
+                <p class="subtitle">此处设置将作为所有用户的默认 AI 服务</p>
+            </div>
+            <button class="btn btn-red btn-sm" onclick="doLogout()">登出</button>
+        </div>
+
+        <div id="cfgAlert" class="alert"></div>
+
+        <div class="form-group">
+            <label>API Base URL</label>
+            <input type="text" id="cfgApiUrl" placeholder="https://api.openai.com/v1">
+        </div>
+        <div class="form-group">
+            <label>API Key</label>
+            <div class="input-row">
+                <input type="password" id="cfgApiKey" placeholder="输入新密钥（留空保持当前值不变）">
+                <button class="btn btn-gray btn-sm" onclick="toggleKey()">显示</button>
+            </div>
+        </div>
+        <div class="form-group">
+            <button class="btn btn-green btn-sm" id="testBtn" onclick="doTest()">🔗 检测连通性 & 获取模型</button>
+            <div id="testStatus" class="status-text"></div>
+        </div>
+        <div class="form-group">
+            <label>模型名称</label>
+            <div class="input-row">
+                <select id="cfgModel">
+                    <option>gpt-4o</option>
+                    <option>gpt-4o-mini</option>
+                    <option>gpt-4-turbo</option>
+                    <option>qwen-vl-max</option>
+                    <option>glm-4v</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Max Tokens</label>
+            <input type="number" id="cfgMaxTokens" value="4096" min="512" max="1000000" step="512">
+        </div>
+
+        <hr class="divider">
+
+        <div class="footer-row">
+            <a class="btn btn-gray" href="/">← 返回主界面</a>
+            <button class="btn btn-primary" onclick="doSave()">💾 保存全局配置</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const loggedIn = {{ 'true' if logged_in else 'false' }};
+
+// ── 初始化 ────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+    if (loggedIn) {
+        showConfig();
+        loadConfig();
+    } else {
+        document.getElementById('loginPanel').classList.add('active');
+    }
+});
+
+function showConfig() {
+    document.getElementById('loginPanel').classList.remove('active');
+    document.getElementById('configPanel').classList.add('active');
+}
+
+// ── 登录 ──────────────────────
+async function doLogin() {
+    const pwd = document.getElementById('loginPassword').value;
+    const alertEl = document.getElementById('loginAlert');
+    try {
+        const r = await fetch('/admin/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: pwd })
+        });
+        const data = await r.json();
+        if (data.ok) {
+            showConfig();
+            loadConfig();
+        } else {
+            alertEl.textContent = data.error || '密码错误';
+            alertEl.classList.add('show');
+        }
+    } catch { alertEl.textContent = '登录请求失败'; alertEl.classList.add('show'); }
+}
+
+// ── 登出 ──────────────────────
+async function doLogout() {
+    await fetch('/admin/logout', { method: 'POST' });
+    location.reload();
+}
+
+// ── 加载配置 ──────────────────
+async function loadConfig() {
+    try {
+        const r = await fetch('/admin/api/ai-config');
+        const cfg = await r.json();
+        document.getElementById('cfgApiUrl').value = cfg.api_url || '';
+        document.getElementById('cfgApiKey').placeholder =
+            cfg.api_key_masked ? `当前: ${cfg.api_key_masked}（留空不修改）` : '输入新密钥';
+        document.getElementById('cfgMaxTokens').value = cfg.max_tokens || 4096;
+        // 设置模型
+        const sel = document.getElementById('cfgModel');
+        if (cfg.model) {
+            let found = [...sel.options].some(o => o.value === cfg.model);
+            if (!found) {
+                const opt = document.createElement('option');
+                opt.value = opt.textContent = cfg.model;
+                sel.insertBefore(opt, sel.firstChild);
+            }
+            sel.value = cfg.model;
+        }
+    } catch (e) { showAlert(true, '加载配置失败: ' + e.message); }
+}
+
+// ── 检测连通性 ────────────────
+async function doTest() {
+    const btn = document.getElementById('testBtn');
+    const statusEl = document.getElementById('testStatus');
+    btn.disabled = true;
+    statusEl.textContent = '正在请求模型列表…';
+    statusEl.className = 'status-text';
+    try {
+        const r = await fetch('/admin/api/test-connection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                api_url: document.getElementById('cfgApiUrl').value.trim(),
+                api_key: document.getElementById('cfgApiKey').value.trim()
+            })
+        });
+        const data = await r.json();
+        if (data.ok && data.models) {
+            const sel = document.getElementById('cfgModel');
+            const cur = sel.value;
+            sel.innerHTML = '';
+            data.models.forEach(m => {
+                const o = document.createElement('option');
+                o.value = o.textContent = m;
+                sel.appendChild(o);
+            });
+            if (data.models.includes(cur)) sel.value = cur;
+            statusEl.textContent = `✅ 获取到 ${data.models.length} 个模型`;
+            statusEl.className = 'status-text ok';
+        } else {
+            statusEl.textContent = '❌ ' + (data.error || '连接失败');
+            statusEl.className = 'status-text err';
+        }
+    } catch (e) {
+        statusEl.textContent = '❌ ' + e.message;
+        statusEl.className = 'status-text err';
+    } finally { btn.disabled = false; }
+}
+
+// ── 保存全局配置 ──────────────
+async function doSave() {
+    try {
+        const body = {
+            api_url:    document.getElementById('cfgApiUrl').value.trim(),
+            api_key:    document.getElementById('cfgApiKey').value.trim(),
+            model:      document.getElementById('cfgModel').value.trim(),
+            max_tokens: parseInt(document.getElementById('cfgMaxTokens').value) || 4096,
+        };
+        const r = await fetch('/admin/api/ai-config', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await r.json();
+        if (data.ok) {
+            showAlert(false, '✅ ' + data.message);
+            loadConfig(); // 刷新显示脱敏 key
+        } else {
+            showAlert(true, data.error || '保存失败');
+        }
+    } catch (e) { showAlert(true, '保存失败: ' + e.message); }
+}
+
+// ── 工具函数 ──────────────────
+function toggleKey() {
+    const el = document.getElementById('cfgApiKey');
+    el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+function showAlert(isErr, msg) {
+    const el = document.getElementById('cfgAlert');
+    el.className = 'alert show ' + (isErr ? 'alert-error' : 'alert-success');
+    el.textContent = msg;
+    setTimeout(() => el.classList.remove('show'), 4000);
+}
+</script>
+</body>
+</html>

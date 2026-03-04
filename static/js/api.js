@@ -61,17 +61,19 @@ const API = {
     },
 
     /** 获取 AI 配置 */
-    async getAiConfig() {
-        const resp = await fetch('/api/ai/config');
+    async getAiConfig(sessionId) {
+        const url = sessionId ? `/api/ai/config?session_id=${sessionId}` : '/api/ai/config';
+        const resp = await fetch(url);
         return resp.json();
     },
 
     /** 保存 AI 配置 */
-    async saveAiConfig(cfg) {
+    async saveAiConfig(sessionId, cfg) {
+        const body = sessionId ? { ...cfg, session_id: sessionId } : cfg;
         const resp = await fetch('/api/ai/config', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(cfg),
+            body: JSON.stringify(body),
         });
         return resp.json();
     },

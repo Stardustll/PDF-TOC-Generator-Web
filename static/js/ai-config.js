@@ -12,7 +12,7 @@
 
         // 加载当前配置
         try {
-            const cfg = await API.getAiConfig();
+            const cfg = await API.getAiConfig(AppState.sessionId);
             document.getElementById('cfgApiUrl').value = cfg.api_url || '';
             document.getElementById('cfgApiKey').value = cfg.api_key || '';
             document.getElementById('cfgMaxTokens').value = cfg.max_tokens || 4096;
@@ -119,6 +119,11 @@
 
     /* ── 保存配置 ──────────────────────────────── */
     async function saveConfig() {
+        if (!AppState.sessionId) {
+            alert('请先上传 PDF');
+            return;
+        }
+
         const apiUrl = document.getElementById('cfgApiUrl').value.trim();
         const model = document.getElementById('cfgModel').value.trim();
 
@@ -132,13 +137,13 @@
         }
 
         try {
-            await API.saveAiConfig({
+            await API.saveAiConfig(AppState.sessionId, {
                 api_url: apiUrl.replace(/\/+$/, ''),
                 api_key: document.getElementById('cfgApiKey').value.trim(),
                 model: model,
                 max_tokens: parseInt(document.getElementById('cfgMaxTokens').value) || 4096,
             });
-            setStatus(`AI 配置已保存：${model}`);
+            setStatus(`当前任务 AI 配置已保存：${model}`);
             closeModal();
         } catch (err) {
             alert('保存失败：' + err.message);
