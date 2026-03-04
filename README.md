@@ -1,5 +1,7 @@
 # PDF 目录自动生成器 (PDF-TOC-Generator-Web)
+
 纯vibe coding编写的自用玩具，自行测试体验
+
 这是一个基于 Python Flask 开发的 Web 应用，旨在通过 AI (OCR) 技术自动识别 PDF 文档的章节目录，并将其生成为 PDF 标准书签，方便用户快速导航。
 
 ## 🌟 主要功能
@@ -9,18 +11,11 @@
 - **书签一键生成**：将编辑好的目录结构回写至原 PDF 文件，生成标准的 PDF 书签。
 - **可视化界面**：简洁直观的 Web UI，降低 PDF 目录处理的门槛。
 
-## 🛠️ 技术栈
-
-- **后端**: [Flask](https://flask.palletsprojects.com/)
-- **PDF 处理**: [PyMuPDF (fitz)](https://pymupdf.readthedocs.io/)
-- **AI/OCR**: [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR)
-- **前端**: HTML5, CSS3, JavaScript (原生)
-
 ## 🚀 快速启动
 
 ### 1. 环境准备
 
-确保您的系统中已安装 Python 3.8 或更高版本。
+确保您的系统中已安装 Python 3.8 或更高版本。（测试使用3.12和3.13无问题）
 
 ### 2. 克隆项目与安装依赖
 
