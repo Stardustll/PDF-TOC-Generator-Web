@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF 目录生成器</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- 工具栏 -->
+    <div id="toolbar">
+        <div class="toolbar-group">
+            <label class="btn btn-primary btn-upload">
+                <input type="file" id="fileInput" accept=".pdf" hidden>
+                <span>📂 打开 PDF</span>
+            </label>
+            <button class="btn btn-primary" id="btnExtract" disabled>🔍 提取目录</button>
+        </div>
+        <div class="toolbar-sep"></div>
+        <div class="toolbar-group">
+            <button class="btn btn-purple" id="btnAi" disabled>🤖 AI 识别</button>
+            <button class="btn btn-gray btn-icon" id="btnAiConfig" title="AI 配置">⚙</button>
+        </div>
+        <div class="toolbar-sep"></div>
+        <div class="toolbar-group">
+            <button class="btn btn-primary" id="btnSave" disabled>💾 保存书签</button>
+        </div>
+        <div class="toolbar-status">
+            <span id="statusText">请打开一个 PDF 文件…</span>
+        </div>
+    </div>
+
+    <!-- 主内容区 -->
+    <div id="main">
+        <!-- 左栏：页面列表 -->
+        <div id="leftPanel" class="panel">
+            <div class="panel-header">📄 页面列表</div>
+            <div class="panel-hint">单击预览 · 双击标记 · Ctrl/Shift 多选</div>
+            <div id="pageList" class="page-list"></div>
+            <div class="panel-footer">
+                <span class="toc-legend">● 绿色 = 目录页</span>
+                <button class="btn-small btn-danger" id="btnClearToc">清除选择</button>
+            </div>
+        </div>
+
+        <!-- 左栏拖拽条 -->
+        <div class="resizer" id="resizerLeft"></div>
+
+        <!-- 中栏：PDF 预览 -->
+        <div id="centerPanel" class="panel">
+            <div class="panel-header">🖼 页面预览</div>
+            <div id="pdfViewerContainer" class="pdf-viewer-container">
+                <div id="pdfViewer" class="pdf-viewer"></div>
+            </div>
+            <div class="zoom-bar">
+                <span>缩放：</span>
+                <input type="range" id="zoomSlider" min="50" max="300" value="100" step="10">
+                <span id="zoomLabel">100%</span>
+            </div>
+        </div>
+
+        <!-- 右栏拖拽条 -->
+        <div class="resizer" id="resizerRight"></div>
+
+        <!-- 右栏：目录编辑 -->
+        <div id="rightPanel" class="panel">
+            <div class="panel-header">📑 目录条目</div>
+            <div class="toc-table-wrapper">
+                <table id="tocTable">
+                    <thead>
+                        <tr>
+                            <th class="col-level">层级</th>
+                            <th class="col-title">标题</th>
+                            <th class="col-page">页码</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tocBody"></tbody>
+                </table>
+            </div>
+
+            <!-- 编辑面板 -->
+            <div class="edit-section">
+                <div class="edit-section-title">✏ 编辑 / 添加条目</div>
+                <div class="edit-row">
+                    <label>层级</label>
+                    <select id="editLevel">
+                        <option value="1">1 - 章</option>
+                        <option value="2">2 - 节</option>
+                        <option value="3">3 - 小节</option>
+                    </select>
+                    <label>标题</label>
+                    <input type="text" id="editTitle" placeholder="输入标题">
+                    <label>页码</label>
+                    <input type="number" id="editPage" min="1" value="1" style="width:64px">
+                </div>
+                <div class="edit-buttons">
+                    <button class="btn-small btn-primary" id="btnApply">✔ 应用</button>
+                    <button class="btn-small btn-green" id="btnInsert">＋ 插入</button>
+                    <button class="btn-small btn-danger" id="btnDelete">✖ 删除</button>
+                    <button class="btn-small btn-gray" id="btnMoveUp">↑ 上移</button>
+                    <button class="btn-small btn-gray" id="btnMoveDown">↓ 下移</button>
+                </div>
+            </div>
+
+            <!-- 页码偏移 -->
+            <div class="edit-section">
+                <div class="edit-section-title">📐 页码偏移（实际页 = 目录页码 + 偏移）</div>
+                <div class="edit-row">
+                    <label>偏移量：</label>
+                    <input type="number" id="offsetInput" value="0" min="-500" max="500" style="width:80px">
+                </div>
+            </div>
+
+            <!-- 原始文本 -->
+            <div class="raw-section">
+                <div class="edit-section-title">📋 原始提取文本</div>
+                <textarea id="rawText" readonly></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- 状态栏 -->
+    <div id="statusBar">
+        <span class="status-hint">PDF 目录生成器 · 双击/Ctrl+点击标记目录页，Shift+点击批量选择 · 双击右侧目录条目跳转预览</span>
+    </div>
+
+    <!-- AI 配置弹窗 -->
+    <div id="aiConfigModal" class="modal" style="display:none">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <span>⚙ AI 服务配置</span>
+                <button class="modal-close" id="aiConfigClose">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <label>API Base URL</label>
+                    <input type="text" id="cfgApiUrl" placeholder="https://api.openai.com/v1">
+                </div>
+                <div class="form-row">
+                    <label>API Key</label>
+                    <div class="input-group">
+                        <input type="password" id="cfgApiKey" placeholder="sk-...">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="cfgShowKey"> 显示
+                        </label>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <button class="btn btn-green" id="cfgTestBtn">🔗 检测连通性 & 获取模型</button>
+                    <span id="cfgTestStatus" class="test-status"></span>
+                </div>
+                <div class="form-row">
+                    <label>模型名称</label>
+                    <div class="input-group">
+                        <select id="cfgModel" class="model-select">
+                            <option>gpt-4o</option>
+                            <option>gpt-4o-mini</option>
+                            <option>gpt-4-turbo</option>
+                            <option>qwen-vl-max</option>
+                            <option>glm-4v</option>
+                        </select>
+                        <button class="btn-small btn-gray" id="cfgRefreshModels">↻</button>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label>Max Tokens</label>
+                    <input type="number" id="cfgMaxTokens" value="4096" min="512" max="1000000" step="512">
+                </div>
+                <div class="form-hint">
+                    提示：API URL 末尾不含 /chat/completions，例如 https://api.openai.com/v1
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" id="cfgSaveBtn">💾 保存</button>
+                <button class="btn btn-gray" id="cfgCancelBtn">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 进度弹窗 -->
+    <div id="progressModal" class="modal" style="display:none">
+        <div class="modal-overlay"></div>
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <span id="progressTitle">处理中…</span>
+            </div>
+            <div class="modal-body" style="text-align:center; padding:24px">
+                <div id="progressMessage" style="margin-bottom:12px; color:#64748b"></div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/pdf-viewer.js"></script>
+    <script src="/static/js/page-list.js"></script>
+    <script src="/static/js/toc-editor.js"></script>
+    <script src="/static/js/ai-config.js"></script>
+</body>
+</html>
