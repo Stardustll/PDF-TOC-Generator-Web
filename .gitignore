@@ -1,6 +1,8 @@
 # Python 字节码缓存
 __pycache__/
+**/__pycache__/
 *.py[cod]
+*.pyc
 *$py.class
 
 # 环境目录
